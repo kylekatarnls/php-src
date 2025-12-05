@@ -6,6 +6,7 @@ date.timezone=UTC
 --FILE--
 <?php
 
+var_dump(clamp(42, 11, 99));
 var_dump(clamp(2, 1, 3));
 var_dump(clamp(0, 1, 3));
 var_dump(clamp(6, 1, 3));
@@ -66,6 +67,7 @@ try {
 
 ?>
 --EXPECT--
+int(42)
 int(2)
 int(1)
 int(3)

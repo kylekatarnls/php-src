@@ -32,6 +32,7 @@ function check_clamp_exception($value, $min, $max) {
     }
 }
 
+var_dump(check_clamp_result(42, 11, 99));
 var_dump(check_clamp_result(2, 1, 3));
 var_dump(check_clamp_result(0, 1, 3));
 var_dump(check_clamp_result(6, 1, 3));
@@ -68,6 +69,7 @@ check_clamp_exception(12, -5, null);
 
 ?>
 --EXPECT--
+int(42)
 int(2)
 int(1)
 int(3)
