@@ -1,8 +1,8 @@
 --TEST--
-clamp() tests
+clamp() tests - frameless code path
 --INI--
 precision=14
-date.timezone = UTC
+date.timezone=UTC
 --FILE--
 <?php
 
@@ -51,7 +51,6 @@ try {
 } catch (ValueError $error) {
     echo $error->getMessage(), "\n";
 }
-
 
 try {
     var_dump(clamp(-9999, 5, null));

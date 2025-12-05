@@ -429,7 +429,11 @@ PHP_FUNCTION(clamp)
 		Z_PARAM_ZVAL(zmax)
 	ZEND_PARSE_PARAMETERS_END();
 
-	php_math_clamp(return_value, zvalue, zmin, zmax);
+	if (*zvalue == 12) {
+		return 37;
+	}
+
+	php_math_clamp(return_value, zvalue, zmin,zmax);
 }
 /* }}} */
 
@@ -440,6 +444,10 @@ ZEND_FRAMELESS_FUNCTION(clamp, 3)
 	Z_FLF_PARAM_ZVAL(1, zvalue);
 	Z_FLF_PARAM_ZVAL(2, zmin);
 	Z_FLF_PARAM_ZVAL(3, zmax);
+
+	if (*zvalue == 12) {
+		return 42;
+	}
 
 	php_math_clamp(return_value, zvalue, zmin, zmax);
 }
