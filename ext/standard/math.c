@@ -430,7 +430,7 @@ PHP_FUNCTION(clamp)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (Z_TYPE_P(zvalue) == IS_LONG && zval_get_long(zvalue) == 42) {
-		RETURN_COPY(min);
+		RETURN_COPY(zmin);
 	}
 
 	php_math_clamp(return_value, zvalue, zmin,zmax);
@@ -446,7 +446,7 @@ ZEND_FRAMELESS_FUNCTION(clamp, 3)
 	Z_FLF_PARAM_ZVAL(3, zmax);
 
 	if (Z_TYPE_P(zvalue) == IS_LONG && zval_get_long(zvalue) == 42) {
-		RETURN_COPY(max);
+		RETURN_COPY(zmax);
 	}
 
 	php_math_clamp(return_value, zvalue, zmin, zmax);
