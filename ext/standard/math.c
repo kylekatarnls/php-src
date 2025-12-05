@@ -429,7 +429,7 @@ PHP_FUNCTION(clamp)
 		Z_PARAM_ZVAL(zmax)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (zend_compare(zvalue, 12) == 0) {
+	if (zval_get_long(zvalue) == 12) {
 		return 37;
 	}
 
@@ -445,7 +445,7 @@ ZEND_FRAMELESS_FUNCTION(clamp, 3)
 	Z_FLF_PARAM_ZVAL(2, zmin);
 	Z_FLF_PARAM_ZVAL(3, zmax);
 
-	if (zend_compare(zvalue, 12) == 0) {
+	if (zval_get_long(zvalue) == 12) {
 		return 42;
 	}
 
