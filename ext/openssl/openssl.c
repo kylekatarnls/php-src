@@ -53,11 +53,6 @@
 #include <openssl/ssl.h>
 #include <openssl/pkcs12.h>
 #include <openssl/cms.h>
-#if PHP_OPENSSL_API_VERSION >= 0x30000
-#include <openssl/core_names.h>
-#include <openssl/param_build.h>
-#include <openssl/provider.h>
-#endif
 
 ZEND_DECLARE_MODULE_GLOBALS(openssl)
 
@@ -308,7 +303,7 @@ bool php_openssl_check_path_ex(
 		fs_file_path_len = file_path_len;
 	}
 
-	if (CHECK_NULL_PATH(fs_file_path, fs_file_path_len)) {
+	if (zend_char_has_nul_byte(fs_file_path, fs_file_path_len)) {
 		error_msg = "must not contain any null bytes";
 		error_type = E_ERROR;
 	} else if (expand_filepath(fs_file_path, real_path) == NULL) {
@@ -2426,9 +2421,9 @@ PHP_FUNCTION(openssl_pbkdf2)
 	}
 
 	if (method_len) {
-		digest = EVP_get_digestbyname(method);
+		digest = php_openssl_get_evp_md_by_name(method);
 	} else {
-		digest = EVP_sha1();
+		digest = php_openssl_get_evp_md_by_name("SHA1");
 	}
 
 	if (!digest) {
@@ -2749,7 +2744,7 @@ PHP_FUNCTION(openssl_pkcs7_read)
 		goto clean_exit;
 	}
 
-	p7 = PEM_read_bio_PKCS7(bio_in, NULL, NULL, NULL);
+	p7 = php_openssl_pem_read_bio_pkcs7(bio_in);
 	if (p7 == NULL) {
 		php_openssl_store_errors();
 		goto clean_exit;
@@ -3071,19 +3066,19 @@ PHP_FUNCTION(openssl_cms_verify)
 
 	switch (encoding) {
 		case ENCODING_PEM:
-			cms = PEM_read_bio_CMS(sigbio, NULL, 0, NULL);
-				datain = in;
-				break;
-			case ENCODING_DER:
-				cms = d2i_CMS_bio(sigbio, NULL);
-				datain = in;
-				break;
-			case ENCODING_SMIME:
-				cms = SMIME_read_CMS(sigbio, &datain);
-				break;
-			default:
-				php_error_docref(NULL, E_WARNING, "Unknown encoding");
-				goto clean_exit;
+			cms = php_openssl_pem_read_bio_cms(sigbio);
+			datain = in;
+			break;
+		case ENCODING_DER:
+			cms = php_openssl_d2i_bio_cms(sigbio);
+			datain = in;
+			break;
+		case ENCODING_SMIME:
+			cms = php_openssl_smime_read_cms(sigbio, &datain);
+			break;
+		default:
+			php_error_docref(NULL, E_WARNING, "Unknown encoding");
+			goto clean_exit;
 	}
 	if (cms == NULL) {
 		php_openssl_store_errors();
@@ -3201,6 +3196,7 @@ PHP_FUNCTION(openssl_cms_encrypt)
 	X509 * cert;
 	const EVP_CIPHER *cipher = NULL;
 	zend_long cipherid = PHP_OPENSSL_CIPHER_DEFAULT;
+	zend_string *cipher_str = NULL;
 	zend_string * strindex;
 	char * infilename = NULL;
 	size_t infilename_len;
@@ -3210,11 +3206,16 @@ PHP_FUNCTION(openssl_cms_encrypt)
 
 	RETVAL_FALSE;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ppza!|lll", &infilename, &infilename_len,
-				  &outfilename, &outfilename_len, &zrecipcerts, &zheaders, &flags, &encoding, &cipherid) == FAILURE) {
-		RETURN_THROWS();
-	}
-
+	ZEND_PARSE_PARAMETERS_START(4, 7)
+		Z_PARAM_PATH(infilename, infilename_len)
+		Z_PARAM_PATH(outfilename, outfilename_len)
+		Z_PARAM_ZVAL(zrecipcerts)
+		Z_PARAM_ARRAY_OR_NULL(zheaders)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(flags)
+		Z_PARAM_LONG(encoding)
+		Z_PARAM_STR_OR_LONG(cipher_str, cipherid)
+	ZEND_PARSE_PARAMETERS_END();
 
 	infile = php_openssl_bio_new_file(
 			infilename, infilename_len, 1, PHP_OPENSSL_BIO_MODE_R(flags));
@@ -3273,7 +3274,11 @@ PHP_FUNCTION(openssl_cms_encrypt)
 	}
 
 	/* sanity check the cipher */
-	cipher = php_openssl_get_evp_cipher_from_algo(cipherid);
+	if (cipher_str) {
+		cipher = php_openssl_get_evp_cipher_by_name(ZSTR_VAL(cipher_str));
+	} else {
+		cipher = php_openssl_get_evp_cipher_from_algo(cipherid);
+	}
 	if (cipher == NULL) {
 		/* shouldn't happen */
 		php_error_docref(NULL, E_WARNING, "Failed to get cipher");
@@ -3398,7 +3403,7 @@ PHP_FUNCTION(openssl_cms_read)
 		goto clean_exit;
 	}
 
-	cms = PEM_read_bio_CMS(bio_in, NULL, NULL, NULL);
+	cms = php_openssl_pem_read_bio_cms(bio_in);
 	if (cms == NULL) {
 		php_openssl_store_errors();
 		goto clean_exit;
@@ -3703,13 +3708,13 @@ PHP_FUNCTION(openssl_cms_decrypt)
 
 	switch (encoding) {
 		case ENCODING_DER:
-			cms = d2i_CMS_bio(in, NULL);
+			cms = php_openssl_d2i_bio_cms(in);
 			break;
 		case ENCODING_PEM:
-                        cms = PEM_read_bio_CMS(in, NULL, 0, NULL);
+			cms = php_openssl_pem_read_bio_cms(in);
 			break;
 		case ENCODING_SMIME:
-			cms = SMIME_read_CMS(in, &datain);
+			cms = php_openssl_smime_read_cms(in, &datain);
 			break;
 		default:
 			zend_argument_value_error(5, "must be an OPENSSL_ENCODING_* constant");
@@ -4192,7 +4197,7 @@ PHP_FUNCTION(openssl_seal)
 		RETURN_THROWS();
 	}
 
-	cipher = EVP_get_cipherbyname(method);
+	cipher = php_openssl_get_evp_cipher_by_name(method);
 	if (!cipher) {
 		php_error_docref(NULL, E_WARNING, "Unknown cipher algorithm");
 		RETURN_FALSE;
@@ -4321,7 +4326,7 @@ PHP_FUNCTION(openssl_open)
 		RETURN_FALSE;
 	}
 
-	cipher = EVP_get_cipherbyname(method);
+	cipher = php_openssl_get_evp_cipher_by_name(method);
 	if (!cipher) {
 		php_error_docref(NULL, E_WARNING, "Unknown cipher algorithm");
 		RETURN_FALSE;
@@ -4365,7 +4370,7 @@ PHP_FUNCTION(openssl_open)
 /* {{{ Return array of available digest algorithms */
 PHP_FUNCTION(openssl_get_md_methods)
 {
-	bool aliases = 0;
+	bool aliases = false;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|b", &aliases) == FAILURE) {
 		RETURN_THROWS();
@@ -4377,7 +4382,7 @@ PHP_FUNCTION(openssl_get_md_methods)
 /* {{{ Return array of available cipher algorithms */
 PHP_FUNCTION(openssl_get_cipher_methods)
 {
-	bool aliases = 0;
+	bool aliases = false;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|b", &aliases) == FAILURE) {
 		RETURN_THROWS();
@@ -4419,7 +4424,7 @@ PHP_FUNCTION(openssl_get_curve_names)
 /* {{{ Computes digest hash value for given data using given method, returns raw or binhex encoded string */
 PHP_FUNCTION(openssl_digest)
 {
-	bool raw_output = 0;
+	bool raw_output = false;
 	char *data, *method;
 	size_t data_len, method_len;
 	const EVP_MD *mdtype;

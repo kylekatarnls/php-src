@@ -406,6 +406,7 @@ static size_t php_read_stream_all_chunks(php_stream *stream, char *buffer, size_
 		if (read_now < stream->chunk_size && read_total != length) {
 			return 0;
 		}
+		buffer += read_now;
 	} while (read_total < length);
 
 	return read_total;
@@ -1198,7 +1199,7 @@ static struct php_gfxinfo *php_handle_avif(php_stream * stream) {
 }
 /* }}} */
 
-/* {{{ php_is_image_avif
+/*
  * Detect whether an image is of type AVIF
  *
  * Only the first "ftyp" box is read.
@@ -1208,12 +1209,8 @@ bool php_is_image_avif(php_stream* stream) {
 	struct php_avif_stream avif_stream;
 	avif_stream.stream = stream;
 
-	if (AvifInfoIdentifyStream(&avif_stream, php_avif_stream_read, php_avif_stream_skip) == kAvifInfoOk) {
-		return 1;
-	}
-	return 0;
+	return AvifInfoIdentifyStream(&avif_stream, php_avif_stream_read, php_avif_stream_skip) == kAvifInfoOk;
 }
-/* }}} */
 
 /* {{{ php_image_type_to_mime_type
  * Convert internal image_type to mime type */
@@ -1439,13 +1436,14 @@ PHPAPI int php_getimagetype(php_stream *stream, const char *input, char *filetyp
 		return IMAGE_FILETYPE_JP2;
 	}
 
+	if (!php_stream_rewind(stream) && php_is_image_avif(stream)) {
+		return IMAGE_FILETYPE_AVIF;
+	}
+
+	/* See GH-20201: this needs to be after avif checks to avoid identifying avif as heif. */
 	if (twelve_bytes_read && !memcmp(filetype + 4, php_sig_ftyp, 4) &&
 		(!memcmp(filetype + 8, php_sig_mif1, 4) || !memcmp(filetype + 8, php_sig_heic, 4) || !memcmp(filetype + 8, php_sig_heix, 4))) {
 		return IMAGE_FILETYPE_HEIF;
-	}
-
-	if (!php_stream_rewind(stream) && php_is_image_avif(stream)) {
-		return IMAGE_FILETYPE_AVIF;
 	}
 
 /* AFTER ALL ABOVE FAILED */

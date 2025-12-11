@@ -278,7 +278,6 @@ function main(): void
         'log_errors=0',
         'html_errors=0',
         'track_errors=0',
-        'report_memleaks=1',
         'report_zend_debug=0',
         'docref_root=',
         'docref_ext=.html',
@@ -647,6 +646,12 @@ function main(): void
     }
     if ($online !== null) {
         $environment['SKIP_ONLINE_TESTS'] = $online ? '0' : '1';
+    }
+
+    if (!defined('STDIN') || !stream_isatty(STDIN)
+     || !defined('STDOUT') || !stream_isatty(STDOUT)
+     || !defined('STDERR') || !stream_isatty(STDERR)) {
+        $environment['SKIP_IO_CAPTURE_TESTS'] = '1';
     }
 
     if ($selected_tests && count($test_files) === 0) {
@@ -2805,6 +2810,11 @@ function is_flaky(TestFile $test): bool
 {
     if ($test->hasSection('FLAKY')) {
         return true;
+    }
+    if ($test->hasSection('SKIPIF')) {
+        if (strpos($test->getSection('SKIPIF'), 'SKIP_PERF_SENSITIVE') !== false) {
+            return true;
+        }
     }
     if (!$test->hasSection('FILE')) {
         return false;

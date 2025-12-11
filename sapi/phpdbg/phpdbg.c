@@ -493,7 +493,7 @@ PHP_FUNCTION(phpdbg_get_executable)
 	HashTable *files = &PHPDBG_G(file_sources);
 	HashTable files_tmp;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|H", &options) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|h", &options) == FAILURE) {
 		RETURN_THROWS();
 	}
 
@@ -587,7 +587,7 @@ PHP_FUNCTION(phpdbg_end_oplog)
 	bool by_function = false;
 	bool by_opcode = false;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|H", &options) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|h", &options) == FAILURE) {
 		RETURN_THROWS();
 	}
 
@@ -982,7 +982,6 @@ static const opt_struct OPTIONS[] = { /* {{{ */
 
 const char phpdbg_ini_hardcoded[] =
 "html_errors=Off\n"
-"register_argc_argv=On\n"
 "implicit_flush=On\n"
 "display_errors=Off\n"
 "log_errors=On\n"

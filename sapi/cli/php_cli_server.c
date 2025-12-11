@@ -304,7 +304,7 @@ static int status_comp(const void *a, const void *b) /* {{{ */
 
 static const char *get_status_string(int code) /* {{{ */
 {
-	http_response_status_code_pair needle = {code, NULL},
+	const http_response_status_code_pair needle = {code, NULL},
 		*result = NULL;
 
 	result = bsearch(&needle, http_status_map, http_status_map_len, sizeof(needle), status_comp);
@@ -2563,7 +2563,11 @@ static zend_result php_cli_server_ctor(php_cli_server *server, const char *addr,
 
 	server_sock = php_network_listen_socket(host, &port, SOCK_STREAM, &server->address_family, &server->socklen, &errstr);
 	if (server_sock == SOCK_ERR) {
-		php_cli_server_logf(PHP_CLI_SERVER_LOG_ERROR, "Failed to listen on %s:%d (reason: %s)", host, port, errstr ? ZSTR_VAL(errstr) : "?");
+		if (strchr(host, ':')) {
+			php_cli_server_logf(PHP_CLI_SERVER_LOG_ERROR, "Failed to listen on [%s]:%d (reason: %s)", host, port, errstr ? ZSTR_VAL(errstr) : "?");
+		} else {
+			php_cli_server_logf(PHP_CLI_SERVER_LOG_ERROR, "Failed to listen on %s:%d (reason: %s)", host, port, errstr ? ZSTR_VAL(errstr) : "?");
+		}
 		if (errstr) {
 			zend_string_release_ex(errstr, 0);
 		}
@@ -2708,14 +2712,16 @@ static zend_result php_cli_server_do_event_for_each_fd_callback(void *_params, p
 		struct sockaddr *sa = pemalloc(server->socklen, 1);
 		client_sock = accept(server->server_sock, sa, &socklen);
 		if (!ZEND_VALID_SOCKET(client_sock)) {
-			int err = php_socket_errno();
-			if (err != SOCK_EAGAIN && php_cli_server_log_level >= PHP_CLI_SERVER_LOG_ERROR) {
+			pefree(sa, 1);
+			if (php_socket_errno() == SOCK_EAGAIN) {
+				return SUCCESS;
+			}
+			if (php_cli_server_log_level >= PHP_CLI_SERVER_LOG_ERROR) {
 				char *errstr = php_socket_strerror(php_socket_errno(), NULL, 0);
 				php_cli_server_logf(PHP_CLI_SERVER_LOG_ERROR,
 					"Failed to accept a client (reason: %s)", errstr);
 				efree(errstr);
 			}
-			pefree(sa, 1);
 			return FAILURE;
 		}
 		if (SUCCESS != php_set_sock_blocking(client_sock, 0)) {

@@ -702,7 +702,7 @@ static void php_cgi_ini_activate_user_config(char *path, int path_len, const cha
 }
 /* }}} */
 
-static int sapi_cgi_activate(void) /* {{{ */
+static int sapi_cgi_pre_request_init(void)
 {
 	fcgi_request *request = (fcgi_request*) SG(server_context);
 	char *path, *doc_root, *server_name;
@@ -764,6 +764,11 @@ static int sapi_cgi_activate(void) /* {{{ */
 		efree(path);
 	}
 
+	return SUCCESS;
+}
+
+static int sapi_cgi_activate(void) /* {{{ */
+{
 	return SUCCESS;
 }
 /* }}} */
@@ -1430,7 +1435,7 @@ PHP_INI_BEGIN()
 	STD_PHP_INI_BOOLEAN("cgi.nph",                     "0",  PHP_INI_ALL,    OnUpdateBool,   nph, php_cgi_globals_struct, php_cgi_globals)
 	STD_PHP_INI_BOOLEAN("cgi.fix_pathinfo",            "1",  PHP_INI_SYSTEM, OnUpdateBool,   fix_pathinfo, php_cgi_globals_struct, php_cgi_globals)
 	STD_PHP_INI_BOOLEAN("cgi.discard_path",            "0",  PHP_INI_SYSTEM, OnUpdateBool,   discard_path, php_cgi_globals_struct, php_cgi_globals)
-	STD_PHP_INI_BOOLEAN("fastcgi.script_path_encoded", "0",  PHP_INI_SYSTEM, OnUpdateBool,   fcgi_script_path_encoded, php_cgi_globals_struct, php_cgi_globals)
+	STD_PHP_INI_BOOLEAN("fastcgi.script_path_encoded", "1",  PHP_INI_SYSTEM, OnUpdateBool,   fcgi_script_path_encoded, php_cgi_globals_struct, php_cgi_globals)
 	STD_PHP_INI_BOOLEAN("fastcgi.logging",             "1",  PHP_INI_SYSTEM, OnUpdateBool,   fcgi_logging, php_cgi_globals_struct, php_cgi_globals)
 	STD_PHP_INI_ENTRY("fastcgi.error_header",          NULL, PHP_INI_SYSTEM, OnUpdateString, error_header, php_cgi_globals_struct, php_cgi_globals)
 	STD_PHP_INI_ENTRY("fpm.config",                    NULL, PHP_INI_SYSTEM, OnUpdateString, fpm_config, php_cgi_globals_struct, php_cgi_globals)
@@ -1443,7 +1448,7 @@ static void php_cgi_globals_ctor(php_cgi_globals_struct *php_cgi_globals)
 	php_cgi_globals->nph = 0;
 	php_cgi_globals->fix_pathinfo = 1;
 	php_cgi_globals->discard_path = 0;
-	php_cgi_globals->fcgi_script_path_encoded = 0;
+	php_cgi_globals->fcgi_script_path_encoded = 1;
 	php_cgi_globals->fcgi_logging = 1;
 	php_cgi_globals->fcgi_logging_request_started = false;
 	zend_hash_init(&php_cgi_globals->user_config_cache, 0, NULL, user_config_cache_entry_dtor, 1);
@@ -1600,6 +1605,7 @@ int main(int argc, char *argv[])
 	sapi_startup(&cgi_sapi_module);
 	cgi_sapi_module.php_ini_path_override = NULL;
 	cgi_sapi_module.php_ini_ignore_cwd = 1;
+	cgi_sapi_module.pre_request_init = sapi_cgi_pre_request_init;
 
 #ifndef HAVE_ATTRIBUTE_WEAK
 	fcgi_set_logger(fpm_fcgi_log);

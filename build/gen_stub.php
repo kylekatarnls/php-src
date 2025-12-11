@@ -2801,7 +2801,7 @@ class ConstInfo extends VariableLike
 
         $code = "\n" . $zvalCode;
 
-        $code .= "\tzend_string *const_{$constName}_name = zend_string_init_interned(\"$constName\", sizeof(\"$constName\") - 1, 1);\n";
+        $code .= "\tzend_string *const_{$constName}_name = zend_string_init_interned(\"$constName\", sizeof(\"$constName\") - 1, true);\n";
         $nameCode = "const_{$constName}_name";
 
         if ($this->exposedDocComment) {
@@ -2855,7 +2855,7 @@ class ConstInfo extends VariableLike
             $code .= "#endif\n";
         }
 
-        $code .= "\tzend_string_release(const_{$constName}_name);\n";
+        $code .= "\tzend_string_release_ex(const_{$constName}_name, true);\n";
 
         return $code;
     }
@@ -3058,13 +3058,13 @@ class StringBuilder {
         // Generally strings will not be known
         $initFn = $interned ? 'zend_string_init_interned' : 'zend_string_init';
         $result = [
-            "\tzend_string *$varName = $initFn(\"$content\", sizeof(\"$content\") - 1, 1);\n",
+            "\tzend_string *$varName = $initFn(\"$content\", sizeof(\"$content\") - 1, true);\n",
             $varName,
-            "\tzend_string_release($varName);\n"
+            "\tzend_string_release_ex($varName, true);\n"
         ];
         // For attribute values that are not freed
         if ($varName === '') {
-            $result[0] = "$initFn(\"$content\", sizeof(\"$content\") - 1, 1);\n";
+            $result[0] = "$initFn(\"$content\", sizeof(\"$content\") - 1, true);\n";
         }
         // If not set, use the current latest version
         $allVersions = ALL_PHP_VERSION_IDS;
@@ -4874,7 +4874,32 @@ function parseConstLike(
     }
 
     if ($type === null && $phpDocType === null) {
-        throw new Exception("Missing type for constant " . $name->__toString());
+        if ($const->value instanceof Node\Scalar\Float_) {
+            $phpDocType = 'float';
+        } elseif ($const->value instanceof Node\Scalar\Int_
+            || ($const->value instanceof Expr\UnaryMinus
+                && $const->value->expr instanceof Node\Scalar\Int_
+            )
+        ) {
+            $phpDocType = 'int';
+        } elseif ($const->value instanceof Node\Scalar\String_) {
+            $phpDocType = 'string';
+        } elseif ($const->value instanceof Expr\ConstFetch
+            && $const->value->name instanceof Node\Name\FullyQualified
+            && (
+                $const->value->name->name === 'false'
+                || $const->value->name->name === 'true'
+            )
+        ) {
+            $phpDocType = 'bool';
+        } elseif ($const->value instanceof Expr\ConstFetch
+            && $const->value->name instanceof Node\Name\FullyQualified
+            && $const->value->name->name === 'null'
+        ) {
+            $phpDocType = 'null';
+        } else {
+            throw new Exception("Missing type for constant " . $name->__toString());
+        }
     }
 
     $constType = $type ? Type::fromNode($type) : null;
@@ -6056,7 +6081,7 @@ function initPhpParser() {
     }
 
     $isInitialized = true;
-    $version = "5.6.0";
+    $version = "5.6.1";
     $phpParserDir = __DIR__ . "/PHP-Parser-$version";
     if (!is_dir($phpParserDir)) {
         installPhpParser($version, $phpParserDir);
